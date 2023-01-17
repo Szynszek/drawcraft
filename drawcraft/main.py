@@ -1,4 +1,3 @@
-import ast
 import numpy as np
 from PIL import Image
 from sklearn.neighbors import KDTree
@@ -7,8 +6,9 @@ import json
 import pathlib
 
 
+path = str(pathlib.Path(__file__).parent.resolve())+r"\\"
 blocks = {}
-with open("draw//blocks.json", "r") as file:
+with open(path + "blocks.json", "r") as file:
     blocks = json.load(file)
 
 
@@ -33,7 +33,7 @@ def create_matrix(img: str, mode1: list[int], scale: int):
                 if any(x in o for x in black_list):
                     del blocks[i][o]
 
-    img_d = Image.open(img)
+    img_d = Image.open(path + r"images\\" + img)
     width, height = img_d.size
     print("Ładowanie obrazu")
     img_r = img_d.resize(
@@ -41,7 +41,6 @@ def create_matrix(img: str, mode1: list[int], scale: int):
     )
     if img_r.mode != "RGB":
         img_r = img_r.convert("RGB")
-    img_r.save("draw//small.png")
     width, height = img_r.size
     print("Generowanie nowego obrazka...")
     result = Image.new("RGB", (width * 16, height * 16))
@@ -69,7 +68,7 @@ def create_matrix(img: str, mode1: list[int], scale: int):
                 if closest_blocks[index] in blocks[i]:
                     face = i
                     img_block = Image.open(
-                        f"draw//blocks//{face}//{closest_blocks[index]}"
+                        fr"{path}blocks\\{face}\\{closest_blocks[index]}"
                     )
                     result.paste(img_block, (x * 16, y * 16))
                     matrix[y][x] = (
@@ -79,11 +78,11 @@ def create_matrix(img: str, mode1: list[int], scale: int):
                         else str(closest_blocks[index])[:-4]
                     )
     print("Zapisywanie...")
-    with open("draw//matrix.txt", "w") as mx:
-        lm = matrix.tolist()
-        for item in lm:
-            mx.write("%s\n" % str(item))
-    result.save("draw//final.png")
+    # with open(path + "//matrix.txt", "w") as mx:
+    #     lm = matrix.tolist()
+    #     for item in lm:
+    #         mx.write("%s\n" % str(item))
+    result.save(path + r"output\\" + img)
     # schem.createScheamtic(matrix, img[5:-4])
     return
 
@@ -113,4 +112,4 @@ def rgb_to_lab(r, g, b):
     return (L, a, b)
 
 
-create_matrix("draw//sprigatito.jpg", [0], 78)
+create_matrix("image.png", [0], 78)
