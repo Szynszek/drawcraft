@@ -1,0 +1,4 @@
+drawcraft/images/*
+drawcraft/output/*
+drawcraft/schematics/*
+drawcraft/__pycache__/*

@@ -6,45 +6,55 @@ import json
 import pathlib
 
 
-path = str(pathlib.Path(__file__).parent.resolve())+r"\\"
-blocks = {}
-with open(path + "blocks.json", "r") as file:
-    blocks = json.load(file)
+path = str(pathlib.Path(__file__).parent.resolve()) + r"\\"
 
 
-def create_matrix(img: str, mode1: list[int], scale: int):
-
-    blu = {}
+def load_blocks(mode):
     black_list = []
+    blocks = {}
+    blocks_raw = {}
+    with open(path + "blocks.json", "r") as file:
+        blocks_raw = json.load(file)
+    for i in blocks_raw.keys():
+        if i == "top" and 1 in mode:
+            blocks.setdefault(i, {}).update(blocks_raw["top"])
+        if i == "side" and 2 in mode:
+            blocks.setdefault(i, {}).update(blocks_raw["side"])
+        if i == "bottom" and 3 in mode:
+            blocks.setdefault(i, {}).update(blocks_raw["bottom"])
+        if i == "solid" and 4 in mode:
+            blocks.setdefault(i, {}).update(blocks_raw["solid"])
+        if 0 in mode:
+            blocks.update(blocks_raw[i])
+    for i in blocks.copy():
+        for o in blocks[i].copy():
+            if any(x in o for x in black_list):
+                del blocks[i][o]
+    return blocks, blocks_raw
+
+
+def create_matrix(img: str, mode: list[int], scale: int):
+
     print("Ładowanie listy bloków...")
-    for i in blocks.keys():
-        if i == "top" and 1 in mode1:
-            blu.setdefault(i, {}).update(blocks["top"])
-        if i == "side" and 2 in mode1:
-            blu.setdefault(i, {}).update(blocks["side"])
-        if i == "bottom" and 3 in mode1:
-            blu.setdefault(i, {}).update(blocks["bottom"])
-        if i == "solid" and 4 in mode1:
-            blu.setdefault(i, {}).update(blocks["solid"])
-        if 0 in mode1:
-            blu.update(blocks[i])
-        for i in blocks.copy():
-            for o in blocks[i].copy():
-                if any(x in o for x in black_list):
-                    del blocks[i][o]
+
+    blocks, blocks_raw = load_blocks(mode)
 
     img_d = Image.open(path + r"images\\" + img)
     width, height = img_d.size
+
     print("Ładowanie obrazu")
+
     img_r = img_d.resize(
         (round((width * scale) / height), scale), Image.Resampling.BICUBIC
     )
     if img_r.mode != "RGB":
         img_r = img_r.convert("RGB")
     width, height = img_r.size
+
     print("Generowanie nowego obrazka...")
+
     result = Image.new("RGB", (width * 16, height * 16))
-    blocks_lab = np.array([blu[block] for block in blu.keys()])
+    blocks_lab = np.array([blocks[block] for block in blocks.keys()])
     # Tworzenie drzewa KDTree z danych bloków
     tree = KDTree(blocks_lab)
     pixels = np.array(img_r)
@@ -54,7 +64,7 @@ def create_matrix(img: str, mode1: list[int], scale: int):
     )
     closest_indices = tree.query(pixels_lab, k=3)[1]
 
-    closest_blocks = [list(blu.keys())[i[0]] for i in closest_indices]
+    closest_blocks = [list(blocks.keys())[i[0]] for i in closest_indices]
 
     closest_blocks = np.array(closest_blocks)
     matrix = np.zeros((height, width))
@@ -64,17 +74,16 @@ def create_matrix(img: str, mode1: list[int], scale: int):
         print(str(x+1) + "/" + str(width))
         for y in range(height):
             index = y * width + x
-            for i in blocks:
-                if closest_blocks[index] in blocks[i]:
+            for i in blocks_raw:
+                if closest_blocks[index] in blocks_raw[i]:
                     face = i
                     img_block = Image.open(
-                        fr"{path}blocks\\{face}\\{closest_blocks[index]}"
+                        rf"{path}blocks\\{face}\\{closest_blocks[index]}"
                     )
                     result.paste(img_block, (x * 16, y * 16))
                     matrix[y][x] = (
                         str(closest_blocks[index])[:-5]
-                        if str(closest_blocks[index])[-5]
-                        in ("1", "2", "3", "4", "5", "6", "7", "8", "9")
+                        if str(closest_blocks[index][-5]).isdigit()
                         else str(closest_blocks[index])[:-4]
                     )
     print("Zapisywanie...")
@@ -112,4 +121,4 @@ def rgb_to_lab(r, g, b):
     return (L, a, b)
 
 
-create_matrix("image.png", [0], 78)
+create_matrix("bet.jpg", [0], 100)
