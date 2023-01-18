@@ -30,31 +30,10 @@ def load_blocks(mode):
         for o in blocks[i].copy():
             if any(x in o for x in black_list):
                 del blocks[i][o]
-    return blocks, blocks_raw
+    return blocks
 
 
-def create_matrix(img: str, mode: list[int], scale: int):
-
-    print("Ładowanie listy bloków...")
-
-    blocks, blocks_raw = load_blocks(mode)
-
-    img_d = Image.open(path + r"images\\" + img)
-    width, height = img_d.size
-
-    print("Ładowanie obrazu")
-
-    img_r = img_d.resize(
-        (round((width * scale) / height), scale), Image.Resampling.BICUBIC
-    )
-    if img_r.mode != "RGB":
-        img_r = img_r.convert("RGB")
-    width, height = img_r.size
-
-    print("Generowanie nowego obrazka...")
-
-    result = Image.new("RGB", (width * 16, height * 16))
-    blocks_lab = np.array([blocks[block] for block in blocks.keys()])
+def get_closest_indices(blocks_lab, img_r):
     # Tworzenie drzewa KDTree z danych bloków
     tree = KDTree(blocks_lab)
     pixels = np.array(img_r)
@@ -64,45 +43,61 @@ def create_matrix(img: str, mode: list[int], scale: int):
     )
     closest_indices = tree.query(pixels_lab, k=3)[1]
 
-    closest_blocks = [list(blocks.keys())[i[0]] for i in closest_indices]
+    return closest_indices
 
+
+def image_prep(scale, img, Resampling):
+    img_d = Image.open(path + r"images\\" + img)
+    width, height = img_d.size
+
+    print("Ładowanie obrazu")
+
+    img_r = img_d.resize((round((width * scale) / height), scale), Resampling)
+    if img_r.mode != "RGB":
+        img_r = img_r.convert("RGB")
+    width, height = img_r.size
+    return img_r, width, height
+
+
+def create_matrix(img: str, mode: list[int], scale: int):
+
+    print("Ładowanie listy bloków...")
+
+    blocks = load_blocks(mode)
+
+    img_r, width, height = image_prep(scale, img, Image.Resampling.BICUBIC)
+
+    print("Generowanie nowego obrazka...")
+
+    result = Image.new("RGB", (width * 16, height * 16))
+    blocks_lab = np.array([blocks[block] for block in blocks.keys()])
+
+    closest_indices = get_closest_indices(blocks_lab, img_r)
+
+    closest_blocks = [list(blocks.keys())[i[0]] for i in closest_indices]
     closest_blocks = np.array(closest_blocks)
     matrix = np.zeros((height, width))
     matrix = np.array(matrix, dtype=str)
     # Wstawianie bloków na odpowiednie pozycje w nowym obrazie
     for x in range(width):
-        print(str(x+1) + "/" + str(width))
+        print(str(x + 1) + "/" + str(width))
         for y in range(height):
             index = y * width + x
-            for i in blocks_raw:
-                if closest_blocks[index] in blocks_raw[i]:
-                    face = i
-                    img_block = Image.open(
-                        rf"{path}blocks\\{face}\\{closest_blocks[index]}"
-                    )
-                    result.paste(img_block, (x * 16, y * 16))
-                    matrix[y][x] = (
-                        str(closest_blocks[index])[:-5]
-                        if str(closest_blocks[index][-5]).isdigit()
-                        else str(closest_blocks[index])[:-4]
-                    )
+            img_block = Image.open(rf"{path}blocks\\{closest_blocks[index]}")
+            result.paste(img_block, (x * 16, y * 16))
+            matrix[y][x] = closest_blocks[index]
+                    
     print("Zapisywanie...")
-    # with open(path + "//matrix.txt", "w") as mx:
-    #     lm = matrix.tolist()
-    #     for item in lm:
-    #         mx.write("%s\n" % str(item))
     result.save(path + r"output\\" + img)
+    result.show()
     # schem.createScheamtic(matrix, img[5:-4])
     return
 
 
 def rgb_to_lab(r, g, b):
-    if r <= 0.1:
-        r = 1
-    if g <= 0.1:
-        g = 1
-    if b <= 0.1:
-        b = 1
+    r = max(r, 0.1)
+    g = max(g, 0.1)
+    b = max(b, 0.1)
     r = r / 255
     g = g / 255
     b = b / 255
@@ -121,4 +116,4 @@ def rgb_to_lab(r, g, b):
     return (L, a, b)
 
 
-create_matrix("bet.jpg", [0], 100)
+create_matrix("bet.jpg", [0], 68)
