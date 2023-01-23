@@ -4,12 +4,14 @@ from sklearn.neighbors import KDTree
 import schem
 import json
 import pathlib
+import timeit
 
-
+print("Ładowanie ścieżki...")
 path = str(pathlib.Path(__file__).parent.resolve()) + r"\\"
 
 
 def load_blocks(mode):
+    print("Ładowanie listy bloków...")
     black_list = []
     blocks = {}
     blocks_raw = {}
@@ -46,49 +48,78 @@ def get_closest_indices(blocks_lab, img_r):
     return closest_indices
 
 
-def image_prep(scale, img, Resampling):
+def get_invisible(img):
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+    alfa = []
+    width, height = img.size
+    pixels = img.load()
+    for x in range(width):
+        for y in range(height):
+            if (pixels[x, y])[3] <= 100:
+                alfa.append((x, y))
+    return alfa
+
+
+def image_prep(scale, img, Resampling, remove_bg):
+    print("Przetwarzanie obrazu...")
+
     img_d = Image.open(path + r"images\\" + img)
     width, height = img_d.size
-
-    print("Ładowanie obrazu")
-
     img_r = img_d.resize((round((width * scale) / height), scale), Resampling)
+    alfa = []
     if img_r.mode != "RGB":
+        if remove_bg:
+            alfa = get_invisible(img_r)
         img_r = img_r.convert("RGB")
     width, height = img_r.size
-    return img_r, width, height
+    return img_r, width, height, alfa
 
 
-def create_matrix(img: str, mode: list[int], scale: int):
-
-    print("Ładowanie listy bloków...")
+def create_matrix(
+    img: str, mode: list[int], scale: int, remove_bg: bool = False
+):
 
     blocks = load_blocks(mode)
 
-    img_r, width, height = image_prep(scale, img, Image.Resampling.BICUBIC)
+    img_r, width, height, alfa = image_prep(
+        scale, img, Image.Resampling.BICUBIC, remove_bg
+    )
 
-    print("Generowanie nowego obrazka...")
-
-    result = Image.new("RGB", (width * 16, height * 16))
+    print("Tworzenie macierzy...")
     blocks_lab = np.array([blocks[block] for block in blocks.keys()])
 
     closest_indices = get_closest_indices(blocks_lab, img_r)
 
     closest_blocks = [list(blocks.keys())[i[0]] for i in closest_indices]
+
     closest_blocks = np.array(closest_blocks)
-    matrix = np.zeros((height, width))
-    matrix = np.array(matrix, dtype=str)
+
     # Wstawianie bloków na odpowiednie pozycje w nowym obrazie
+    print("Generowanie nowego obrazka...")
+    result = Image.new("RGBA", (width * 16, height * 16))
+    start = timeit.default_timer()
+    z = 0
     for x in range(width):
-        print(str(x + 1) + "/" + str(width))
+        z += 1
+        stop = timeit.default_timer() - start
+        if z >= 5:
+            print(
+                round(((stop) / (x + 1)) * (width - x + 1), 2),
+                "sekund ",
+                str(x + 1) + "/" + str(width),
+            )
+            z = 0
         for y in range(height):
             index = y * width + x
-            img_block = Image.open(rf"{path}blocks\\{closest_blocks[index]}")
-            result.paste(img_block, (x * 16, y * 16))
-            matrix[y][x] = closest_blocks[index]
-                    
+            if (x, y) not in alfa:
+                img_block = Image.open(
+                    rf"{path}blocks\\{closest_blocks[index]}"
+                )
+                result.paste(img_block, (x * 16, y * 16))
     print("Zapisywanie...")
-    result.save(path + r"output\\" + img)
+    result.save(path + r"output\\" + img[:-3] + "png")
+
     result.show()
     # schem.createScheamtic(matrix, img[5:-4])
     return
@@ -116,4 +147,4 @@ def rgb_to_lab(r, g, b):
     return (L, a, b)
 
 
-create_matrix("bet.jpg", [0], 68)
+create_matrix("005.png", [0], 70, True)
