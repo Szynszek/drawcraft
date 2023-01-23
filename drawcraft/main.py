@@ -5,13 +5,14 @@ import schem
 import json
 import pathlib
 import timeit
+import logging
 
 print("Ładowanie ścieżki...")
 path = str(pathlib.Path(__file__).parent.resolve()) + r"\\"
-
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 
 def load_blocks(mode):
-    print("Ładowanie listy bloków...")
+    logging.info("Ładowanie listy bloków")
     black_list = []
     blocks = {}
     blocks_raw = {}
@@ -62,7 +63,7 @@ def get_invisible(img):
 
 
 def image_prep(scale, img, Resampling, remove_bg):
-    print("Przetwarzanie obrazu...")
+    logging.info("Przetwarzanie obrazu...")
 
     img_d = Image.open(path + r"images\\" + img)
     width, height = img_d.size
@@ -79,46 +80,57 @@ def image_prep(scale, img, Resampling, remove_bg):
 def create_matrix(
     img: str, mode: list[int], scale: int, remove_bg: bool = False
 ):
-
+    start = timeit.default_timer()
     blocks = load_blocks(mode)
 
     img_r, width, height, alfa = image_prep(
         scale, img, Image.Resampling.BICUBIC, remove_bg
     )
 
-    print("Tworzenie macierzy...")
+    logging.info("Tworzenie macierzy...")
     blocks_lab = np.array([blocks[block] for block in blocks.keys()])
 
     closest_indices = get_closest_indices(blocks_lab, img_r)
 
     closest_blocks = [list(blocks.keys())[i[0]] for i in closest_indices]
 
+    coords = {}
+    for item in list(set(closest_blocks)):
+        for idx, element in enumerate(closest_blocks):
+            if element == item:
+                coords.setdefault(item, []).append(idx)
+
     closest_blocks = np.array(closest_blocks)
 
     # Wstawianie bloków na odpowiednie pozycje w nowym obrazie
-    print("Generowanie nowego obrazka...")
+    logging.info("Generowanie nowego obrazka...")
     result = Image.new("RGBA", (width * 16, height * 16))
-    start = timeit.default_timer()
-    z = 0
-    for x in range(width):
-        z += 1
-        stop = timeit.default_timer() - start
-        if z >= 5:
-            print(
-                round(((stop) / (x + 1)) * (width - x + 1), 2),
-                "sekund ",
-                str(x + 1) + "/" + str(width),
-            )
-            z = 0
-        for y in range(height):
-            index = y * width + x
-            if (x, y) not in alfa:
-                img_block = Image.open(
-                    rf"{path}blocks\\{closest_blocks[index]}"
-                )
-                result.paste(img_block, (x * 16, y * 16))
-    print("Zapisywanie...")
-    result.save(path + r"output\\" + img[:-3] + "png")
+    done = 1
+    start_placing = timeit.default_timer()
+    stop_placing = 0
+    for element in coords.items():
+        logging.info(
+            "Done: {}/{}  Current: {} Left: {} seconds".format(done, width*height, element[0], round(((stop_placing) / (done)) * (width*height-done), 2)))
+        img_block = Image.open(r"{}blocks\\{}".format(path, element[0]))
+        for coord in element[1]:
+            done += 1
+            y = 0
+            while coord >= width:
+                coord -= width
+                y += 1
+            x = coord
+            result.paste(img_block, (x * 16, y * 16))
+        stop_placing = timeit.default_timer() - start_placing
+    # for x in range(width):
+    #     for y in range(height):
+    #         index = y * width + x
+    #         img_block = Image.open(rf"{path}blocks\\{closest_blocks[index]}")
+    #         result.paste(img_block, (x * 16, y * 16))
+
+    logging.info("Zapisywanie...")
+    stop = timeit.default_timer() - start
+    logging.info("{} sekund".format(stop))
+    result.save("{}output\\{}png".format(path, img[:-3]))
 
     result.show()
     # schem.createScheamtic(matrix, img[5:-4])
@@ -147,4 +159,4 @@ def rgb_to_lab(r, g, b):
     return (L, a, b)
 
 
-create_matrix("005.png", [0], 70, True)
+create_matrix("gura.jpg", [0], 1000, False)
